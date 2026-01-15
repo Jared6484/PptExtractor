@@ -12,7 +12,7 @@ OUTPUT_FILE = "output.xlsx"
 # Backend logic
 # -------------------------------
 
-def extract_assessments_from_ppt(contents):
+def extract_fields_from_ppt(contents):
     """
     contents: base64-encoded file contents from Dash Upload component
     """
@@ -22,21 +22,41 @@ def extract_assessments_from_ppt(contents):
     prs = Presentation(io.BytesIO(decoded)) # from Presentation import
                                             # this reads ppt/presentation.xml, slides1.xml, ppt/media/* etc.. and 
                                             # Builds Python objects for Presentation, SLides, Shapes, Text frames, Layouts, Masters, Relationships
-    assessments = []
+    
+    prefixes = ["Assessment", "MSN", "ToT", "MGRS", "Country Code", "EEI", "Background", "Summary", "DTG"]
+    
+    results = []
 
+    # loop through each slide
     for slide_number, slide in enumerate(prs.slides, start=1):
+
+        row = {"Slide": slide_number}  # dictionary with slide numbers   
+
+        for prefix in prefixes:  # create the columns
+            row[prefix] = ""
+
+        # loop through shape in each slide    
         for shape in slide.shapes:
-            if not shape.has_text_frame:
+            if not shape.has_text_frame:  # if no text on the slide go to the next shape on the slide.
                 continue
 
             text = shape.text.strip()
-            if text.startswith("Assessment"):
-                assessments.append({
-                    "Slide": slide_number,
-                    "Assessment Text": text
-                })
+            if not text:  # after stripping whiteespace if nothing is left, go to the next slide.
+                continue
 
-    return assessments
+           
+            for prefix in prefixes:
+                if text.lower().startswith(prefix.lower() + ":"):
+                    value = text[len(prefix) + 1 :].strip()
+
+                    if row[prefix]: 
+                        row[prefix] += "\n" + value
+                    else:
+                        row[prefix] = value
+
+
+        results.append(row)
+    return results
 
 
 def write_to_excel(data):
@@ -110,11 +130,11 @@ def process_upload(contents, filename): # func is called from callback trigger. 
         return html.Div("Please upload a .pptx file.", style={"color": "red"}), ""
 
     try:
-        data = extract_assessments_from_ppt(contents)  # func is called from callback trigger.  Contents passes to 'extract_assess..."
+        data = extract_fields_from_ppt(contents)  # func is called from callback trigger.  Contents passes to 'extract_assess..."
 
         if not data:
             return html.Div(
-                "No assessments found in this presentation.",
+                "No data found in this presentation.",
                 style={"color": "orange"}
             ), ""
 
